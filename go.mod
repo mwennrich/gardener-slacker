@@ -7,7 +7,7 @@ require (
 	github.com/spf13/cobra v1.2.1
 	k8s.io/apimachinery v0.21.2
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
-	k8s.io/klog v1.0.0
+	k8s.io/klog/v2 v2.8.0
 	k8s.io/utils v0.0.0-20210709001253-0e1f9d693477 // indirect
 )
 
@@ -41,7 +41,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	k8s.io/api v0.21.2 // indirect
-	k8s.io/klog/v2 v2.8.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20210305001622-591a79e4bda7 // indirect
 	sigs.k8s.io/controller-runtime v0.8.3 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.0 // indirect

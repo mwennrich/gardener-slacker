@@ -7,7 +7,7 @@ import (
 	"syscall"
 
 	app "github.com/mwennrich/gardener-slacker/cmd/gardenerslacker"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 func main() {
