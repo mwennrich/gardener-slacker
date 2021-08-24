@@ -61,7 +61,7 @@ spec:
         command:
         - /gardener-slacker
         - --filename=/data/db.json
-        - --slackurl=https://hooks.slack.com/services/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
+        - --slackurl=<slack-url>
         - --kubeconfig=/etc/seed/kubecfg.yaml
         volumeMounts:
         - mountPath: /data
@@ -86,4 +86,3 @@ spec:
         requests:
           storage: 5Mi
       volumeMode: Filesystem
-
