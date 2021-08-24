@@ -1,0 +1,12 @@
+.vscode
+.idea
+.DS_Store
+*.coverprofile
+
+bin
+dev
+tmp
+vendor
+
+gardener-slacker
+TODO
