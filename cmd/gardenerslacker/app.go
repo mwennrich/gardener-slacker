@@ -236,7 +236,7 @@ func writeDBJSON(filename string, clusters map[string]cluster) {
 
 func sendSlackNotification(slackUIRL string, msg string) {
 	slackBody, _ := json.Marshal(slackRequestBody{Text: msg})
-	req, err := http.NewRequest(http.MethodPost, slackUIRL, bytes.NewBuffer(slackBody))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, slackUIRL, bytes.NewBuffer(slackBody))
 	if err != nil {
 		klog.Error(err)
 	}
@@ -248,9 +248,13 @@ func sendSlackNotification(slackUIRL string, msg string) {
 	if err != nil {
 		klog.Error(err)
 	}
+	defer resp.Body.Close()
 
 	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
+	_,err=buf.ReadFrom(resp.Body)
+	if err != nil {
+		klog.Error(err)
+	}
 	if buf.String() != "ok" {
 		klog.Error(errors.New("non-ok response returned from Slack"))
 	}
