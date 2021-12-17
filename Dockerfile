@@ -4,7 +4,7 @@ COPY / /work
 WORKDIR /work
 RUN make
 
-FROM alpine:3.14
+FROM alpine:3.15
 COPY --from=builder /work/bin/gardener-slacker /gardener-slacker
 USER root
 ENTRYPOINT ["/gardener-slacker","check"]
