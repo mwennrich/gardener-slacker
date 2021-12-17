@@ -129,17 +129,13 @@ func run(ctx context.Context, o *options) error {
 			if s.Minimum != newcluster.Minimum || s.Maximum != newcluster.Maximum {
 				// sent to slack
 				sendSlackNotification(o.slackURL, fmt.Sprintf("new cluster sizes for %s: min %d, max %d (old: %d, %d)", newcluster.Name, newcluster.Minimum, newcluster.Maximum, s.Minimum, s.Maximum))
-				continue
 			}
 			if s.ImageName != newcluster.ImageName || s.ImageVersion != newcluster.ImageVersion {
 				sendSlackNotification(o.slackURL, fmt.Sprintf("new worker image versions for %s: %s-%s (old: %s-%s)", newcluster.Name, newcluster.ImageName, newcluster.ImageVersion, s.ImageName, s.ImageVersion))
-				continue
 			}
 			if s.APIVersion != newcluster.APIVersion {
 				sendSlackNotification(o.slackURL, fmt.Sprintf("new cluster API version for %s: %s (old: %s)", newcluster.Name, newcluster.APIVersion, s.APIVersion))
-				continue
 			}
-
 		}
 		for c := range clusters {
 			if _, ok := newclusters[c]; !ok {
