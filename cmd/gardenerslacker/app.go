@@ -137,12 +137,13 @@ func run(ctx context.Context, o *options) error {
 				sendSlackNotification(o.slackURL, fmt.Sprintf("new cluster API version for %s: %s (old: %s)", newcluster.Name, newcluster.APIVersion, s.APIVersion))
 			}
 			if shoot.Status.LastOperation != nil && string(shoot.Status.LastOperation.State) != newcluster.State && shoot.Status.LastOperation.State == v1beta1.LastOperationStateError {
+				msg := fmt.Sprintf("shoot %s has errors: %v\n", shoot.Name, shoot.Status.LastOperation.Description)
 				for _, condition := range shoot.Status.Conditions {
 					if condition.Status != v1beta1.ConditionTrue && condition.Status != v1beta1.ConditionProgressing {
-						sendSlackNotification(o.slackURL, fmt.Sprintf("shoot %s has errors: %s - %v", shoot.Name, condition.Type, condition.Message))
-						continue
+						msg = msg + fmt.Sprintf("%s - %v\n", condition.Type, condition.Message)
 					}
 				}
+				sendSlackNotification(o.slackURL, msg)
 			}
 		}
 		for c := range clusters {
