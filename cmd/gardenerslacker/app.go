@@ -84,7 +84,7 @@ func run(ctx context.Context, o *options) error {
 	stopCh := make(chan struct{})
 
 	// Create informer factories to create informers.
-	gardenInformerFactory, err := setupInformerFactories(o.kubeconfigPath, stopCh)
+	gardenInformerFactory, err := setupInformerFactories(o.kubeconfigPath)
 	if err != nil {
 		return err
 	}
@@ -123,23 +123,23 @@ func run(ctx context.Context, o *options) error {
 			s, ok := clusters[newcluster.Name]
 			if !ok {
 				// new shoot found
-				sendSlackNotification(o.slackURL, fmt.Sprintf("new cluster: %s in seed %s", newcluster.Name, *shoot.Spec.SeedName))
+				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster: %s in seed %s", newcluster.Name, *shoot.Spec.SeedName))
 				continue
 			}
 			if s.Minimum != newcluster.Minimum || s.Maximum != newcluster.Maximum {
 				// sent to slack
-				sendSlackNotification(o.slackURL, fmt.Sprintf("new cluster sizes for %s: min %d, max %d (old: %d, %d)", newcluster.Name, newcluster.Minimum, newcluster.Maximum, s.Minimum, s.Maximum))
+				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster sizes for %s: min %d, max %d (old: %d, %d)", newcluster.Name, newcluster.Minimum, newcluster.Maximum, s.Minimum, s.Maximum))
 			}
 			if s.ImageName != newcluster.ImageName || s.ImageVersion != newcluster.ImageVersion {
-				sendSlackNotification(o.slackURL, fmt.Sprintf("new worker image versions for %s: %s-%s (old: %s-%s)", newcluster.Name, newcluster.ImageName, newcluster.ImageVersion, s.ImageName, s.ImageVersion))
+				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new worker image versions for %s: %s-%s (old: %s-%s)", newcluster.Name, newcluster.ImageName, newcluster.ImageVersion, s.ImageName, s.ImageVersion))
 			}
 			if s.APIVersion != newcluster.APIVersion {
-				sendSlackNotification(o.slackURL, fmt.Sprintf("new cluster API version for %s: %s (old: %s)", newcluster.Name, newcluster.APIVersion, s.APIVersion))
+				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster API version for %s: %s (old: %s)", newcluster.Name, newcluster.APIVersion, s.APIVersion))
 			}
 		}
 		for c := range clusters {
 			if _, ok := newclusters[c]; !ok {
-				sendSlackNotification(o.slackURL, fmt.Sprintf("cluster %s has been deleted", c))
+				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("cluster %s has been deleted", c))
 			}
 		}
 
@@ -180,7 +180,7 @@ func newClientConfig(kubeconfigPath string) (*rest.Config, error) {
 	return client, nil
 }
 
-func setupInformerFactories(kubeconfigPath string, stopCh <-chan struct{}) (gardencoreinformers.SharedInformerFactory, error) {
+func setupInformerFactories(kubeconfigPath string) (gardencoreinformers.SharedInformerFactory, error) {
 	restConfig, err := newClientConfig(kubeconfigPath)
 	if err != nil {
 		return nil, err
@@ -234,9 +234,12 @@ func writeDBJSON(filename string, clusters map[string]cluster) {
 	}
 }
 
-func sendSlackNotification(slackUIRL string, msg string) {
-	slackBody, _ := json.Marshal(slackRequestBody{Text: msg})
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, slackUIRL, bytes.NewBuffer(slackBody))
+func sendSlackNotification(ctx context.Context, slackUIRL string, msg string) {
+	slackBody, err := json.Marshal(slackRequestBody{Text: msg})
+	if err != nil {
+		klog.Error(err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, slackUIRL, bytes.NewBuffer(slackBody))
 	if err != nil {
 		klog.Error(err)
 	}
@@ -251,7 +254,7 @@ func sendSlackNotification(slackUIRL string, msg string) {
 	defer resp.Body.Close()
 
 	buf := new(bytes.Buffer)
-	_,err=buf.ReadFrom(resp.Body)
+	_, err = buf.ReadFrom(resp.Body)
 	if err != nil {
 		klog.Error(err)
 	}

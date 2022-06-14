@@ -3,7 +3,7 @@ module github.com/mwennrich/gardener-slacker
 go 1.18
 
 require (
-	github.com/gardener/gardener v1.48.2
+	github.com/gardener/gardener v1.37.2
 	github.com/spf13/cobra v1.4.0
 	k8s.io/apimachinery v0.24.1
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
