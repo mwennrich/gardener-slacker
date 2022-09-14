@@ -1,6 +1,6 @@
 module github.com/mwennrich/gardener-slacker
 
-go 1.18
+go 1.19
 
 require (
 	github.com/gardener/gardener v1.37.2
