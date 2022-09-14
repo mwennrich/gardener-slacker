@@ -69,8 +69,12 @@ spec:
         - mountPath: /etc/seed
           name: seed-kubecfg
           readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
       serviceAccount: gardener-slacker
       serviceAccountName: gardener-slacker
+      automountServiceAccountToken: false
       volumes:
       - name: seed-kubecfg
         secret:
