@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	clientset "github.com/gardener/gardener/pkg/client/core/clientset/versioned"
 	gardencoreinformers "github.com/gardener/gardener/pkg/client/core/informers/externalversions"
 
@@ -38,6 +39,7 @@ type cluster struct {
 	ImageName    string `json:"imagename"`
 	ImageVersion string `json:"imageversion"`
 	APIVersion   string `json:"apiversion"`
+	State        string `json:"state"`
 }
 
 type slackRequestBody struct {
@@ -91,14 +93,11 @@ func run(ctx context.Context, o *options) error {
 
 	// Start the factories and wait until the creates informes has synce
 	var (
-		shootInformer   = gardenInformerFactory.Core().V1beta1().Shoots().Informer()
-		seedInformer    = gardenInformerFactory.Core().V1beta1().Seeds().Informer()
-		projectInformer = gardenInformerFactory.Core().V1beta1().Projects().Informer()
-		plantInformer   = gardenInformerFactory.Core().V1beta1().Plants().Informer()
+		shootInformer = gardenInformerFactory.Core().V1beta1().Shoots().Informer()
 	)
 
 	gardenInformerFactory.Start(stopCh)
-	if !cache.WaitForCacheSync(ctx.Done(), shootInformer.HasSynced, seedInformer.HasSynced, projectInformer.HasSynced, plantInformer.HasSynced) {
+	if !cache.WaitForCacheSync(ctx.Done(), shootInformer.HasSynced) {
 
 		return errors.New("timed out waiting for Garden caches to sync")
 	}
@@ -118,6 +117,7 @@ func run(ctx context.Context, o *options) error {
 			newcluster.ImageName = shoot.Spec.Provider.Workers[0].Machine.Image.Name
 			newcluster.ImageVersion = *shoot.Spec.Provider.Workers[0].Machine.Image.Version
 			newcluster.APIVersion = shoot.Spec.Kubernetes.Version
+			newcluster.State = string(shoot.Status.LastOperation.State)
 			newclusters[newcluster.Name] = newcluster
 
 			s, ok := clusters[newcluster.Name]
@@ -135,6 +135,15 @@ func run(ctx context.Context, o *options) error {
 			}
 			if s.APIVersion != newcluster.APIVersion {
 				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster API version for %s: %s (old: %s)", newcluster.Name, newcluster.APIVersion, s.APIVersion))
+			}
+			if shoot.Status.LastOperation != nil && s.State != newcluster.State && shoot.Status.LastOperation.State == v1beta1.LastOperationStateError {
+				msg := fmt.Sprintf("shoot %s has errors: %v\n", newcluster.Name, shoot.Status.LastOperation.Description)
+				for _, condition := range shoot.Status.Conditions {
+					if condition.Status != v1beta1.ConditionTrue && condition.Status != v1beta1.ConditionProgressing {
+						msg = msg + fmt.Sprintf("%s - %v\n", condition.Type, condition.Message)
+					}
+				}
+				sendSlackNotification(o.slackURL, msg)
 			}
 		}
 		for c := range clusters {
