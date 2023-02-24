@@ -57,7 +57,7 @@ spec:
     spec:
       containers:
       - name: gardener-slacker
-        image: mwennrich/gardener-slacker:latest
+        image: ghcr.io/mwennrich/gardener-slacker:latest
         command:
         - /gardener-slacker
         - --filename=/data/db.json
