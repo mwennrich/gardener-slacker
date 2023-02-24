@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -158,7 +158,7 @@ func newClientConfig(kubeconfigPath string) (*rest.Config, error) {
 	}
 
 	// Kubeconfig based configuration
-	kubeconfig, err := ioutil.ReadFile(kubeconfigPath)
+	kubeconfig, err := os.ReadFile(kubeconfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func readDBJSON(filename string) map[string]cluster {
 		if err != nil {
 			klog.Error(err)
 		}
-		j, _ := ioutil.ReadAll(f)
+		j, _ := io.ReadAll(f)
 		f.Close()
 		if err != nil {
 			klog.Error(err)
@@ -228,7 +228,7 @@ func writeDBJSON(filename string, clusters map[string]cluster) {
 	if err != nil {
 		klog.Error(err)
 	}
-	err = ioutil.WriteFile(filename, j, 0600)
+	err = os.WriteFile(filename, j, 0600)
 	if err != nil {
 		klog.Error(err.Error)
 	}
