@@ -31,13 +31,19 @@ type options struct {
 	filename       string
 }
 
-type cluster struct {
+type workergroup struct {
 	Name         string `json:"name"`
 	Minimum      int32  `json:"minimum"`
 	Maximum      int32  `json:"maximum"`
 	ImageName    string `json:"imagename"`
 	ImageVersion string `json:"imageversion"`
 	APIVersion   string `json:"apiversion"`
+}
+
+type cluster struct {
+	Name         string                 `json:"name"`
+	APIVersion   string                 `json:"apiversion"`
+	Workergroups map[string]workergroup `json:"workergroups"`
 }
 
 type slackRequestBody struct {
@@ -99,7 +105,6 @@ func run(ctx context.Context, o *options) error {
 
 	gardenInformerFactory.Start(stopCh)
 	if !cache.WaitForCacheSync(ctx.Done(), shootInformer.HasSynced, seedInformer.HasSynced, projectInformer.HasSynced, plantInformer.HasSynced) {
-
 		return errors.New("timed out waiting for Garden caches to sync")
 	}
 
@@ -110,32 +115,62 @@ func run(ctx context.Context, o *options) error {
 		}
 		newclusters := make(map[string]cluster)
 		clusters := readDBJSON(o.filename)
+
+		// migration code can be deleted in a few weeks
+		migrated := false
+		for _, c1 := range clusters {
+			migrated = len(clusters[c1.Name].Workergroups) == 0
+			break
+		}
 		for _, shoot := range is {
 			var newcluster cluster
-			newcluster.Name = shoot.Namespace + "/" + shoot.Name
-			newcluster.Minimum = shoot.Spec.Provider.Workers[0].Minimum
-			newcluster.Maximum = shoot.Spec.Provider.Workers[0].Maximum
-			newcluster.ImageName = shoot.Spec.Provider.Workers[0].Machine.Image.Name
-			newcluster.ImageVersion = *shoot.Spec.Provider.Workers[0].Machine.Image.Version
+			newcluster.Name = shoot.Name
 			newcluster.APIVersion = shoot.Spec.Kubernetes.Version
-			newclusters[newcluster.Name] = newcluster
 
 			s, ok := clusters[newcluster.Name]
-			if !ok {
+			if !ok && !migrated {
 				// new shoot found
 				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster: %s in seed %s", newcluster.Name, *shoot.Spec.SeedName))
 				continue
 			}
-			if s.Minimum != newcluster.Minimum || s.Maximum != newcluster.Maximum {
-				// sent to slack
-				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster sizes for %s: min %d, max %d (old: %d, %d)", newcluster.Name, newcluster.Minimum, newcluster.Maximum, s.Minimum, s.Maximum))
-			}
-			if s.ImageName != newcluster.ImageName || s.ImageVersion != newcluster.ImageVersion {
-				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new worker image versions for %s: %s-%s (old: %s-%s)", newcluster.Name, newcluster.ImageName, newcluster.ImageVersion, s.ImageName, s.ImageVersion))
-			}
-			if s.APIVersion != newcluster.APIVersion {
+			if s.APIVersion != newcluster.APIVersion && !migrated {
 				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster API version for %s: %s (old: %s)", newcluster.Name, newcluster.APIVersion, s.APIVersion))
 			}
+
+			newworkers := make(map[string]workergroup)
+			for _, worker := range shoot.Spec.Provider.Workers {
+				var newworker workergroup
+				newworker.Name = worker.Name
+				newworker.Minimum = worker.Minimum
+				newworker.Maximum = worker.Maximum
+				newworker.ImageName = worker.Machine.Image.Name
+				newworker.ImageVersion = *worker.Machine.Image.Version
+				newworker.APIVersion = *worker.Kubernetes.Version
+				newworkers[newworker.Name] = newworker
+				w, ok := s.Workergroups[newworker.Name]
+				if !ok && !migrated {
+					// new shoot found
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new workergroup: %s in cluster %s", newworker.Name, s.Name))
+					continue
+				}
+				if (w.Minimum != newworker.Minimum || w.Maximum != newworker.Maximum) && !migrated {
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new sizes for workergroup %s in %s: min %d, max %d (old: %d, %d)", newworker.Name, s.Name, newworker.Minimum, newworker.Maximum, w.Minimum, w.Maximum))
+				}
+				if (w.ImageName != newworker.ImageName || w.ImageVersion != newworker.ImageVersion) && !migrated {
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new worker image versions for workergroup %s in %s: %s-%s (old: %s-%s)", newworker.Name, s.Name, newworker.ImageName, newworker.ImageVersion, w.ImageName, w.ImageVersion))
+				}
+				if w.APIVersion != newworker.APIVersion && !migrated {
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new API version for workergroup %s in %s: %s (old: %s)", newworker.Name, s.Name, newworker.APIVersion, w.APIVersion))
+				}
+			}
+			newcluster.Workergroups = newworkers
+
+			for w := range s.Workergroups {
+				if _, ok := newworkers[w]; !ok {
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("workergroup %s in %s has been deleted", w, s.Name))
+				}
+			}
+			newclusters[newcluster.Name] = newcluster
 		}
 		for c := range clusters {
 			if _, ok := newclusters[c]; !ok {
