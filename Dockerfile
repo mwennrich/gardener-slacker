@@ -7,7 +7,7 @@ COPY / /work
 WORKDIR /work
 RUN make
 
-FROM alpine:3.17
+FROM scratch
 COPY --from=builder /work/bin/gardener-slacker /gardener-slacker
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
