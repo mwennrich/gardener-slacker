@@ -178,7 +178,7 @@ func run(ctx context.Context, o *options) error {
 			newclusters[newcluster.Name] = newcluster
 		}
 		for c := range clusters {
-			if _, ok := newclusters[c]; !ok {
+			if _, ok := newclusters[c]; !ok && !migrated {
 				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("cluster %s has been deleted", c))
 			}
 		}
