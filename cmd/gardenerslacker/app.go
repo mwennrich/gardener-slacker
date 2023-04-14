@@ -134,7 +134,7 @@ func run(ctx context.Context, o *options) error {
 			s, ok := clusters[newcluster.Name]
 			if !ok && !migrated {
 				// new shoot found
-				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster: %s in seed %s", newcluster.Name, *shoot.Spec.SeedName))
+				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster: %s (%s) in seed %s ", newcluster.Name, newcluster.APIVersion, *shoot.Spec.SeedName))
 				isNewCluster = true
 			}
 			if s.APIVersion != newcluster.APIVersion && !migrated && !isNewCluster {
@@ -156,7 +156,7 @@ func run(ctx context.Context, o *options) error {
 				w, ok := s.Workergroups[newworker.Name]
 				if !ok && !migrated && !isNewCluster {
 					// new shoot found
-					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new workergroup: %s in cluster %s", newworker.Name, s.Name))
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new workergroup: %s in cluster %s-%s:%s (%d-%d)", newworker.Name, s.Name, newworker.ImageName, newworker.ImageVersion, newworker.Minimum, newworker.Maximum))
 					continue
 				}
 				if (w.Minimum != newworker.Minimum || w.Maximum != newworker.Maximum) && !migrated && !isNewCluster {
