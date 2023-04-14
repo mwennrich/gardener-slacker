@@ -273,7 +273,7 @@ func writeDBJSON(filename string, clusters map[string]cluster) {
 	}
 	err = os.WriteFile(filename, j, 0600)
 	if err != nil {
-		klog.Error(err.Error)
+		klog.Error(err)
 	}
 }
 
