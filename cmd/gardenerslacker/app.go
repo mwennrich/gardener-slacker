@@ -148,7 +148,9 @@ func run(ctx context.Context, o *options) error {
 				newworker.Maximum = worker.Maximum
 				newworker.ImageName = worker.Machine.Image.Name
 				newworker.ImageVersion = *worker.Machine.Image.Version
-				newworker.APIVersion = *worker.Kubernetes.Version
+				if worker.Kubernetes != nil && worker.Kubernetes.Version != nil {
+					newworker.APIVersion = *worker.Kubernetes.Version
+				}
 				newworkers[newworker.Name] = newworker
 				w, ok := s.Workergroups[newworker.Name]
 				if !ok && !migrated {
