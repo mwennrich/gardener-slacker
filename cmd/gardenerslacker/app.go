@@ -122,6 +122,9 @@ func run(ctx context.Context, o *options) error {
 			migrated = len(clusters[c1.Name].Workergroups) == 0
 			break
 		}
+		if migrated {
+			klog.Info("migration started, no notifications will be sent")
+		}
 		for _, shoot := range is {
 			var newcluster cluster
 			newcluster.Name = shoot.Name
@@ -179,6 +182,9 @@ func run(ctx context.Context, o *options) error {
 		}
 
 		writeDBJSON(o.filename, newclusters)
+		if migrated {
+			klog.Info("migration finished")
+		}
 		time.Sleep(1 * time.Minute)
 	}
 }
