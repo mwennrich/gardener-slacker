@@ -114,7 +114,10 @@ func run(ctx context.Context, o *options) error {
 			return err
 		}
 		newclusters := make(map[string]cluster)
-		clusters := readDBJSON(o.filename)
+		clusters, err := readDBJSON(o.filename)
+		if err != nil {
+			return err
+		}
 
 		// migration code can be deleted in a few weeks
 		migrated := false
@@ -133,7 +136,6 @@ func run(ctx context.Context, o *options) error {
 
 			s, ok := clusters[newcluster.Name]
 			if !ok && !migrated {
-				// new shoot found
 				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster: %s (%s) in seed %s ", newcluster.Name, newcluster.APIVersion, *shoot.Spec.SeedName))
 				isNewCluster = true
 			}
@@ -155,8 +157,7 @@ func run(ctx context.Context, o *options) error {
 				newworkers[newworker.Name] = newworker
 				w, ok := s.Workergroups[newworker.Name]
 				if !ok && !migrated {
-					// new shoot found
-					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new workergroup: %s in cluster %s %s-%s (min: %d max: %d)", newworker.Name, newcluster.Name, newworker.ImageName, newworker.ImageVersion, newworker.Minimum, newworker.Maximum))
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new workergroup %s for %s: %s-%s (min: %d max: %d)", newworker.Name, newcluster.Name, newworker.ImageName, newworker.ImageVersion, newworker.Minimum, newworker.Maximum))
 					continue
 				}
 				if (w.Minimum != newworker.Minimum || w.Maximum != newworker.Maximum) && !migrated && !isNewCluster {
@@ -244,27 +245,27 @@ func setupInformerFactories(kubeconfigPath string) (gardencoreinformers.SharedIn
 	return gardenInformerFactory, nil
 }
 
-func readDBJSON(filename string) map[string]cluster {
+func readDBJSON(filename string) (map[string]cluster, error) {
 
 	db := make(map[string]cluster)
-	_, err := os.Stat(filename)
-	if !os.IsNotExist(err) {
-		f, err := os.Open(filename)
-		if err != nil {
-			klog.Error(err)
+	f, err := os.Open(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// no db file found, create new one
+			return db, nil
+		} else {
+			return nil, err
 		}
-		j, _ := io.ReadAll(f)
-		f.Close()
-		if err != nil {
-			klog.Error(err)
-		}
-		if err = json.Unmarshal(j, &db); err != nil {
-			klog.Error(err)
-		}
-	} else {
-		klog.Infof("file %s does not exist", filename)
 	}
-	return db
+	defer f.Close()
+	j, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(j, &db); err != nil {
+		return nil, err
+	}
+	return db, nil
 }
 
 func writeDBJSON(filename string, clusters map[string]cluster) {
