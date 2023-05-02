@@ -31,13 +31,19 @@ type options struct {
 	filename       string
 }
 
-type cluster struct {
+type workergroup struct {
 	Name         string `json:"name"`
 	Minimum      int32  `json:"minimum"`
 	Maximum      int32  `json:"maximum"`
 	ImageName    string `json:"imagename"`
 	ImageVersion string `json:"imageversion"`
 	APIVersion   string `json:"apiversion"`
+}
+
+type cluster struct {
+	Name         string                 `json:"name"`
+	APIVersion   string                 `json:"apiversion"`
+	Workergroups map[string]workergroup `json:"workergroups"`
 }
 
 type slackRequestBody struct {
@@ -99,7 +105,6 @@ func run(ctx context.Context, o *options) error {
 
 	gardenInformerFactory.Start(stopCh)
 	if !cache.WaitForCacheSync(ctx.Done(), shootInformer.HasSynced, seedInformer.HasSynced, projectInformer.HasSynced, plantInformer.HasSynced) {
-
 		return errors.New("timed out waiting for Garden caches to sync")
 	}
 
@@ -109,41 +114,81 @@ func run(ctx context.Context, o *options) error {
 			return err
 		}
 		newclusters := make(map[string]cluster)
-		clusters := readDBJSON(o.filename)
+		clusters, err := readDBJSON(o.filename)
+		if err != nil {
+			return err
+		}
+
+		// migration code can be deleted in a few weeks
+		migrated := false
+		for _, c1 := range clusters {
+			migrated = len(clusters[c1.Name].Workergroups) == 0
+			break
+		}
+		if migrated {
+			klog.Info("migration started, no notifications will be sent")
+		}
 		for _, shoot := range is {
 			var newcluster cluster
-			newcluster.Name = shoot.Namespace + "/" + shoot.Name
-			newcluster.Minimum = shoot.Spec.Provider.Workers[0].Minimum
-			newcluster.Maximum = shoot.Spec.Provider.Workers[0].Maximum
-			newcluster.ImageName = shoot.Spec.Provider.Workers[0].Machine.Image.Name
-			newcluster.ImageVersion = *shoot.Spec.Provider.Workers[0].Machine.Image.Version
+			newcluster.Name = shoot.Name
 			newcluster.APIVersion = shoot.Spec.Kubernetes.Version
-			newclusters[newcluster.Name] = newcluster
+			isNewCluster := false
 
 			s, ok := clusters[newcluster.Name]
-			if !ok {
-				// new shoot found
-				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster: %s in seed %s", newcluster.Name, *shoot.Spec.SeedName))
-				continue
+			if !ok && !migrated {
+				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster: %s (%s) in seed %s ", newcluster.Name, newcluster.APIVersion, *shoot.Spec.SeedName))
+				isNewCluster = true
 			}
-			if s.Minimum != newcluster.Minimum || s.Maximum != newcluster.Maximum {
-				// sent to slack
-				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster sizes for %s: min %d, max %d (old: %d, %d)", newcluster.Name, newcluster.Minimum, newcluster.Maximum, s.Minimum, s.Maximum))
-			}
-			if s.ImageName != newcluster.ImageName || s.ImageVersion != newcluster.ImageVersion {
-				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new worker image versions for %s: %s-%s (old: %s-%s)", newcluster.Name, newcluster.ImageName, newcluster.ImageVersion, s.ImageName, s.ImageVersion))
-			}
-			if s.APIVersion != newcluster.APIVersion {
+			if s.APIVersion != newcluster.APIVersion && !migrated && !isNewCluster {
 				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster API version for %s: %s (old: %s)", newcluster.Name, newcluster.APIVersion, s.APIVersion))
 			}
+
+			newworkers := make(map[string]workergroup)
+			for _, worker := range shoot.Spec.Provider.Workers {
+				var newworker workergroup
+				newworker.Name = worker.Name
+				newworker.Minimum = worker.Minimum
+				newworker.Maximum = worker.Maximum
+				newworker.ImageName = worker.Machine.Image.Name
+				newworker.ImageVersion = *worker.Machine.Image.Version
+				if worker.Kubernetes != nil && worker.Kubernetes.Version != nil {
+					newworker.APIVersion = *worker.Kubernetes.Version
+				}
+				newworkers[newworker.Name] = newworker
+				w, ok := s.Workergroups[newworker.Name]
+				if !ok && !migrated {
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new workergroup %s for %s: %s-%s (min: %d max: %d)", newworker.Name, newcluster.Name, newworker.ImageName, newworker.ImageVersion, newworker.Minimum, newworker.Maximum))
+					continue
+				}
+				if (w.Minimum != newworker.Minimum || w.Maximum != newworker.Maximum) && !migrated && !isNewCluster {
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new sizes for workergroup %s in %s: min %d, max %d (old: %d, %d)", newworker.Name, s.Name, newworker.Minimum, newworker.Maximum, w.Minimum, w.Maximum))
+				}
+				if (w.ImageName != newworker.ImageName || w.ImageVersion != newworker.ImageVersion) && !migrated && !isNewCluster {
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new worker image versions for workergroup %s in %s: %s-%s (old: %s-%s)", newworker.Name, s.Name, newworker.ImageName, newworker.ImageVersion, w.ImageName, w.ImageVersion))
+				}
+				if w.APIVersion != newworker.APIVersion && !migrated && !isNewCluster {
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new API version for workergroup %s in %s: %s (old: %s)", newworker.Name, s.Name, newworker.APIVersion, w.APIVersion))
+				}
+			}
+			newcluster.Workergroups = newworkers
+
+			for w := range s.Workergroups {
+				if _, ok := newworkers[w]; !ok && !isNewCluster {
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("workergroup %s in %s has been deleted", w, s.Name))
+				}
+			}
+			newclusters[newcluster.Name] = newcluster
 		}
 		for c := range clusters {
-			if _, ok := newclusters[c]; !ok {
+			if _, ok := newclusters[c]; !ok && !migrated {
 				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("cluster %s has been deleted", c))
 			}
 		}
 
 		writeDBJSON(o.filename, newclusters)
+		if migrated {
+			klog.Info("migration finished")
+		}
 		time.Sleep(1 * time.Minute)
 	}
 }
@@ -200,27 +245,27 @@ func setupInformerFactories(kubeconfigPath string) (gardencoreinformers.SharedIn
 	return gardenInformerFactory, nil
 }
 
-func readDBJSON(filename string) map[string]cluster {
+func readDBJSON(filename string) (map[string]cluster, error) {
 
 	db := make(map[string]cluster)
-	_, err := os.Stat(filename)
-	if !os.IsNotExist(err) {
-		f, err := os.Open(filename)
-		if err != nil {
-			klog.Error(err)
+	f, err := os.Open(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// no db file found, create new one
+			return db, nil
+		} else {
+			return nil, err
 		}
-		j, _ := io.ReadAll(f)
-		f.Close()
-		if err != nil {
-			klog.Error(err)
-		}
-		if err = json.Unmarshal(j, &db); err != nil {
-			klog.Error(err)
-		}
-	} else {
-		klog.Infof("file %s does not exist", filename)
 	}
-	return db
+	defer f.Close()
+	j, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(j, &db); err != nil {
+		return nil, err
+	}
+	return db, nil
 }
 
 func writeDBJSON(filename string, clusters map[string]cluster) {
@@ -230,7 +275,7 @@ func writeDBJSON(filename string, clusters map[string]cluster) {
 	}
 	err = os.WriteFile(filename, j, 0600)
 	if err != nil {
-		klog.Error(err.Error)
+		klog.Error(err)
 	}
 }
 
