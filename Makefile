@@ -5,7 +5,7 @@ all: gardener-slacker
 
 .PHONY: gardener-slacker
 gardener-slacker:
-	go build -o bin/gardener-slacker -ldflags cmd/main.go
+	go build -o bin/gardener-slacker cmd/main.go
 	strip bin/gardener-slacker
 
 .PHONY: dockerimages
