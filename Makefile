@@ -5,7 +5,7 @@ all: gardener-slacker
 
 .PHONY: gardener-slacker
 gardener-slacker:
-	go build -o bin/gardener-slacker -ldflags "-X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=warn" cmd/main.go
+	go build -o bin/gardener-slacker -ldflags cmd/main.go
 	strip bin/gardener-slacker
 
 .PHONY: dockerimages
