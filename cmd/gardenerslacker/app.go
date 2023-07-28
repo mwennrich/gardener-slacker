@@ -100,11 +100,10 @@ func run(ctx context.Context, o *options) error {
 		shootInformer   = gardenInformerFactory.Core().V1beta1().Shoots().Informer()
 		seedInformer    = gardenInformerFactory.Core().V1beta1().Seeds().Informer()
 		projectInformer = gardenInformerFactory.Core().V1beta1().Projects().Informer()
-		plantInformer   = gardenInformerFactory.Core().V1beta1().Plants().Informer()
 	)
 
 	gardenInformerFactory.Start(stopCh)
-	if !cache.WaitForCacheSync(ctx.Done(), shootInformer.HasSynced, seedInformer.HasSynced, projectInformer.HasSynced, plantInformer.HasSynced) {
+	if !cache.WaitForCacheSync(ctx.Done(), shootInformer.HasSynced, seedInformer.HasSynced, projectInformer.HasSynced) {
 		return errors.New("timed out waiting for Garden caches to sync")
 	}
 
