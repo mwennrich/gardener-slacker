@@ -38,6 +38,7 @@ type workergroup struct {
 	ImageName    string `json:"imagename"`
 	ImageVersion string `json:"imageversion"`
 	APIVersion   string `json:"apiversion"`
+	Type         string `json:"type"`
 }
 
 type cluster struct {
@@ -150,13 +151,14 @@ func run(ctx context.Context, o *options) error {
 				newworker.Maximum = worker.Maximum
 				newworker.ImageName = worker.Machine.Image.Name
 				newworker.ImageVersion = *worker.Machine.Image.Version
+				newworker.Type = worker.Machine.Type
 				if worker.Kubernetes != nil && worker.Kubernetes.Version != nil {
 					newworker.APIVersion = *worker.Kubernetes.Version
 				}
 				newworkers[newworker.Name] = newworker
 				w, ok := s.Workergroups[newworker.Name]
 				if !ok && !migrated {
-					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new workergroup %s for %s: %s-%s (min: %d max: %d)", newworker.Name, newcluster.Name, newworker.ImageName, newworker.ImageVersion, newworker.Minimum, newworker.Maximum))
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new workergroup %s (%s) for %s: %s-%s (min: %d max: %d)", newworker.Name, newworker.Type, newcluster.Name, newworker.ImageName, newworker.ImageVersion, newworker.Minimum, newworker.Maximum))
 					continue
 				}
 				if (w.Minimum != newworker.Minimum || w.Maximum != newworker.Maximum) && !migrated && !isNewCluster {
@@ -167,6 +169,9 @@ func run(ctx context.Context, o *options) error {
 				}
 				if w.APIVersion != newworker.APIVersion && !migrated && !isNewCluster {
 					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new API version for workergroup %s in %s: %s (old: %s)", newworker.Name, s.Name, newworker.APIVersion, w.APIVersion))
+				}
+				if w.Type != "" && w.Type != newworker.Type && !migrated && !isNewCluster {
+					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new machine type for workergroup %s in %s: %s (old: %s)", newworker.Name, s.Name, newworker.Type, w.Type))
 				}
 			}
 			newcluster.Workergroups = newworkers
