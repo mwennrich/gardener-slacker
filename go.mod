@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/gardener/gardener v1.58.3
 	github.com/spf13/cobra v1.7.0
+	github.com/wI2L/jsondiff v0.4.0
 	k8s.io/apimachinery v0.25.12
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
 	k8s.io/klog/v2 v2.100.1
@@ -14,7 +15,7 @@ require (
 require (
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/emicklei/go-restful/v3 v3.10.2 // indirect
+	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-openapi/jsonpointer v0.20.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
