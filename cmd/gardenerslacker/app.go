@@ -22,6 +22,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/wI2L/jsondiff"
 	"k8s.io/klog/v2"
 )
 
@@ -42,9 +43,10 @@ type workergroup struct {
 }
 
 type cluster struct {
-	Name         string                 `json:"name"`
-	APIVersion   string                 `json:"apiversion"`
-	Workergroups map[string]workergroup `json:"workergroups"`
+	Name                 string                 `json:"name"`
+	APIVersion           string                 `json:"apiversion"`
+	Workergroups         map[string]workergroup `json:"workergroups"`
+	InfrastructureConfig string                 `json:"infrastructureconfig"`
 }
 
 type slackRequestBody struct {
@@ -132,6 +134,7 @@ func run(ctx context.Context, o *options) error {
 			var newcluster cluster
 			newcluster.Name = shoot.Name
 			newcluster.APIVersion = shoot.Spec.Kubernetes.Version
+			newcluster.InfrastructureConfig = string(shoot.Spec.Provider.InfrastructureConfig.Raw)
 			isNewCluster := false
 
 			s, ok := clusters[newcluster.Name]
@@ -141,6 +144,15 @@ func run(ctx context.Context, o *options) error {
 			}
 			if s.APIVersion != newcluster.APIVersion && !migrated && !isNewCluster {
 				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster API version for %s: %s (old: %s)", newcluster.Name, newcluster.APIVersion, s.APIVersion))
+			}
+
+			if s.InfrastructureConfig != "" && s.InfrastructureConfig != newcluster.InfrastructureConfig && !migrated && !isNewCluster {
+				diff, err := jsondiff.CompareJSON([]byte(s.InfrastructureConfig), []byte(newcluster.InfrastructureConfig))
+				if err != nil {
+					klog.Error(err)
+				}
+
+				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("changed infrastructure for %s: %s ", newcluster.Name, diff))
 			}
 
 			newworkers := make(map[string]workergroup)
