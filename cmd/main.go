@@ -20,7 +20,7 @@ func main() {
 
 	go func() {
 		<-signalCh
-		klog.Info("Received interupt signal.")
+		klog.Info("Received interrupt signal.")
 		signal.Stop(signalCh)
 		cancel()
 	}()

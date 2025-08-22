@@ -271,7 +271,9 @@ func readDBJSON(filename string) (map[string]cluster, error) {
 			return nil, err
 		}
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	j, err := io.ReadAll(f)
 	if err != nil {
 		return nil, err
@@ -310,7 +312,9 @@ func sendSlackNotification(ctx context.Context, slackUIRL string, msg string) {
 	if err != nil {
 		klog.Error(err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	buf := new(bytes.Buffer)
 	_, err = buf.ReadFrom(resp.Body)
