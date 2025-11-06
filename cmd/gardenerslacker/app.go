@@ -44,6 +44,7 @@ type workergroup struct {
 
 type cluster struct {
 	Name                 string                 `json:"name"`
+	Project              string                 `json:"project"`
 	APIVersion           string                 `json:"apiversion"`
 	Workergroups         map[string]workergroup `json:"workergroups"`
 	InfrastructureConfig string                 `json:"infrastructureconfig"`
@@ -119,32 +120,36 @@ func run(ctx context.Context, o *options) error {
 			return err
 		}
 
-		// migration code can be deleted in a few weeks
-		migrated := false
-		for _, c1 := range clusters {
-			migrated = len(clusters[c1.Name].Workergroups) == 0
-			break
+		// migration: add Project field to existing clusters
+		needsMigration := false
+		for _, c := range clusters {
+			if c.Project == "" {
+				needsMigration = true
+				break
+			}
 		}
-		if migrated {
-			klog.Info("migration started, no notifications will be sent")
+		if needsMigration {
+			klog.Info("migration started: adding Project field to existing clusters, no notifications will be sent")
 		}
+
 		for _, shoot := range is {
 			var newcluster cluster
 			newcluster.Name = shoot.Name
+			newcluster.Project = shoot.Namespace
 			newcluster.APIVersion = shoot.Spec.Kubernetes.Version
 			newcluster.InfrastructureConfig = string(shoot.Spec.Provider.InfrastructureConfig.Raw)
 			isNewCluster := false
 
 			s, ok := clusters[newcluster.Name]
-			if !ok && !migrated {
+			if !ok && !needsMigration {
 				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster: %s (%s) in seed %s ", newcluster.Name, newcluster.APIVersion, *shoot.Spec.SeedName))
 				isNewCluster = true
 			}
-			if s.APIVersion != newcluster.APIVersion && !migrated && !isNewCluster {
+			if s.APIVersion != newcluster.APIVersion && !needsMigration && !isNewCluster {
 				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster API version for %s: %s (old: %s)", newcluster.Name, newcluster.APIVersion, s.APIVersion))
 			}
 
-			if s.InfrastructureConfig != "" && s.InfrastructureConfig != newcluster.InfrastructureConfig && !migrated && !isNewCluster {
+			if s.InfrastructureConfig != "" && s.InfrastructureConfig != newcluster.InfrastructureConfig && !needsMigration && !isNewCluster {
 				diff, err := jsondiff.CompareJSON([]byte(s.InfrastructureConfig), []byte(newcluster.InfrastructureConfig))
 				if err != nil {
 					klog.Error(err)
@@ -167,20 +172,20 @@ func run(ctx context.Context, o *options) error {
 				}
 				newworkers[newworker.Name] = newworker
 				w, ok := s.Workergroups[newworker.Name]
-				if !ok && !migrated {
+				if !ok && !needsMigration {
 					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new workergroup %s (%s) for %s: %s-%s (min: %d max: %d)", newworker.Name, newworker.Type, newcluster.Name, newworker.ImageName, newworker.ImageVersion, newworker.Minimum, newworker.Maximum))
 					continue
 				}
-				if (w.Minimum != newworker.Minimum || w.Maximum != newworker.Maximum) && !migrated && !isNewCluster {
+				if (w.Minimum != newworker.Minimum || w.Maximum != newworker.Maximum) && !needsMigration && !isNewCluster {
 					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new sizes for workergroup %s in %s: min %d, max %d (old: %d, %d)", newworker.Name, s.Name, newworker.Minimum, newworker.Maximum, w.Minimum, w.Maximum))
 				}
-				if (w.ImageName != newworker.ImageName || w.ImageVersion != newworker.ImageVersion) && !migrated && !isNewCluster {
+				if (w.ImageName != newworker.ImageName || w.ImageVersion != newworker.ImageVersion) && !needsMigration && !isNewCluster {
 					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new worker image versions for workergroup %s in %s: %s-%s (old: %s-%s)", newworker.Name, s.Name, newworker.ImageName, newworker.ImageVersion, w.ImageName, w.ImageVersion))
 				}
-				if w.APIVersion != newworker.APIVersion && !migrated && !isNewCluster {
+				if w.APIVersion != newworker.APIVersion && !needsMigration && !isNewCluster {
 					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new API version for workergroup %s in %s: %s (old: %s)", newworker.Name, s.Name, newworker.APIVersion, w.APIVersion))
 				}
-				if w.Type != "" && w.Type != newworker.Type && !migrated && !isNewCluster {
+				if w.Type != "" && w.Type != newworker.Type && !needsMigration && !isNewCluster {
 					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new machine type for workergroup %s in %s: %s (old: %s)", newworker.Name, s.Name, newworker.Type, w.Type))
 				}
 			}
@@ -194,14 +199,14 @@ func run(ctx context.Context, o *options) error {
 			newclusters[newcluster.Name] = newcluster
 		}
 		for c := range clusters {
-			if _, ok := newclusters[c]; !ok && !migrated {
+			if _, ok := newclusters[c]; !ok && !needsMigration {
 				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("cluster %s has been deleted", c))
 			}
 		}
 
 		writeDBJSON(o.filename, newclusters)
-		if migrated {
-			klog.Info("migration finished")
+		if needsMigration {
+			klog.Info("migration finished: Project field added to all clusters")
 		}
 		time.Sleep(1 * time.Minute)
 	}
