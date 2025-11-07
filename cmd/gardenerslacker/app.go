@@ -120,16 +120,24 @@ func run(ctx context.Context, o *options) error {
 			return err
 		}
 
-		// migration: add Project field to existing clusters
+		// migration: convert keys from "name" to "project/name" format
 		needsMigration := false
-		for _, c := range clusters {
-			if c.Project == "" {
+		for key, c := range clusters {
+			if c.Project != "" && key == c.Name {
+				// old format detected: key is just the name, not project/name
 				needsMigration = true
 				break
 			}
 		}
 		if needsMigration {
-			klog.Info("migration started: adding Project field to existing clusters, no notifications will be sent")
+			klog.Info("migration started: converting cluster keys to project/name format, no notifications will be sent")
+			// rebuild clusters map with new key format
+			migratedClusters := make(map[string]cluster)
+			for _, c := range clusters {
+				newKey := c.Project + "/" + c.Name
+				migratedClusters[newKey] = c
+			}
+			clusters = migratedClusters
 		}
 
 		for _, shoot := range is {
@@ -140,7 +148,8 @@ func run(ctx context.Context, o *options) error {
 			newcluster.InfrastructureConfig = string(shoot.Spec.Provider.InfrastructureConfig.Raw)
 			isNewCluster := false
 
-			s, ok := clusters[newcluster.Name]
+			clusterKey := newcluster.Project + "/" + newcluster.Name
+			s, ok := clusters[clusterKey]
 			if !ok && !needsMigration {
 				sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("new cluster: %s (%s) in seed %s ", newcluster.Name, newcluster.APIVersion, *shoot.Spec.SeedName))
 				isNewCluster = true
@@ -196,7 +205,7 @@ func run(ctx context.Context, o *options) error {
 					sendSlackNotification(ctx, o.slackURL, fmt.Sprintf("workergroup %s in %s has been deleted", w, s.Name))
 				}
 			}
-			newclusters[newcluster.Name] = newcluster
+			newclusters[clusterKey] = newcluster
 		}
 		for c := range clusters {
 			if _, ok := newclusters[c]; !ok && !needsMigration {
@@ -206,7 +215,7 @@ func run(ctx context.Context, o *options) error {
 
 		writeDBJSON(o.filename, newclusters)
 		if needsMigration {
-			klog.Info("migration finished: Project field added to all clusters")
+			klog.Info("migration finished: cluster keys converted to project/name format")
 		}
 		time.Sleep(1 * time.Minute)
 	}
