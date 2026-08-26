@@ -217,7 +217,14 @@ func run(ctx context.Context, o *options) error {
 		if needsMigration {
 			klog.Info("migration finished: cluster keys converted to project/name format")
 		}
-		time.Sleep(1 * time.Minute)
+
+		select {
+		case <-ctx.Done():
+			klog.Info("Received shutdown signal, stopping gardener-slacker")
+			return nil
+		case <-time.After(1 * time.Minute):
+			// Continue polling.
+		}
 	}
 }
 
