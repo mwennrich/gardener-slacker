@@ -3,7 +3,7 @@ module github.com/mwennrich/gardener-slacker
 go 1.26.0
 
 require (
-	github.com/gardener/gardener v1.132.0
+	github.com/gardener/gardener v1.153.0
 	github.com/spf13/cobra v1.10.2
 	github.com/wI2L/jsondiff v0.7.1
 	k8s.io/apimachinery v0.37.0
