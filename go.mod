@@ -7,7 +7,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/wI2L/jsondiff v0.7.1
 	k8s.io/apimachinery v0.37.3
-	k8s.io/client-go v0.37.3
+	k8s.io/client-go v11.0.0+incompatible
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/utils v0.0.0-20260626114624-be93311217bd // indirect
 )
